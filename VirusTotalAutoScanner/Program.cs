@@ -1,11 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Security.AccessControl;
 using System.Security.Principal;
 using System.Threading;
 using System.Timers;
+using System.Xml;
+using System.Xml.Serialization;
 using NLog;
 using NLog.Interface;
 using VirusTotalNET;
@@ -16,11 +17,11 @@ namespace VirusTotalAutoScanner
 {
     public static class Program
     {
-        private const string ApiKey = "e49c455020f74072f577ad2f614800b9a8cce2c77c6e927e17f141100a2d9091";
+        private static string _apiKey;
         private static ILogger _logger;
 
         private static List<FileInfoAndScanResult> _sessionScan;
-        private static List<string> _procssed = new List<string>(); 
+        private static readonly List<string> Procssed = new List<string>();
 
         public static void Main()
         {
@@ -29,23 +30,40 @@ namespace VirusTotalAutoScanner
             try
             {
                 _sessionScan = new List<FileInfoAndScanResult>();
-                var timer = new Timer {AutoReset = true,Interval = 60000};
 
-                const string watchPath = @"C:\Users\Paul\Downloads\";
+                _logger.Debug("Loading \"VirusTotalAutoScannerConfiguration.xml\"");
+                var xmlReader = XmlReader.Create("VirusTotalAutoScannerConfiguration.xml");
+                _logger.Debug("Serializing \"VirusTotalAutoScannerConfiguration.xml\"");
+                var serialiser = new XmlSerializer(typeof(Configuration));
+                var configuration = (Configuration)serialiser.Deserialize(xmlReader);
 
-                var fsw = new FileSystemWatcher(watchPath,"*.*") {IncludeSubdirectories = true,EnableRaisingEvents = true};
+                _apiKey = configuration.VirusTotalApiKey;
+                
+                foreach (var location in configuration.Locations)
+                {
+                    var path = Environment.ExpandEnvironmentVariables(location.Path);
+                    _logger.Debug("Creating FileSystemWatcher for location \"{0}\"",path);
+                    var fsw = new FileSystemWatcher(path, "*.*")
+                    {
+                        IncludeSubdirectories = location.IncludeSubfolders,
+                        EnableRaisingEvents = true
+                    };
 
-                fsw.Created += FswOnCreatedOrChanged;
-                fsw.Changed += FswOnCreatedOrChanged;
+                    fsw.Created += FswOnCreatedOrChanged;
+                    fsw.Changed += FswOnCreatedOrChanged;
+                }
+
+                var timer = new Timer { AutoReset = true, Interval = 60000 };
 
                 timer.Elapsed += CheckScans;
                 timer.Start();
 
                 Thread.Sleep(Timeout.Infinite);
+
             }
             catch (Exception ex)
             {
-                _logger.Fatal("Program crashed",ex);
+                _logger.Fatal("Program crashed", ex);
                 throw;
             }
 
@@ -63,7 +81,7 @@ namespace VirusTotalAutoScanner
 
                 _logger.Trace("fullPath: {0}", fullPath);
 
-                if (_procssed.Contains(fullPath))
+                if (Procssed.Contains(fullPath))
                 {
                     _logger.Debug("File already processed");
                     return;
@@ -83,7 +101,7 @@ namespace VirusTotalAutoScanner
                     return;
                 }
 
-                var vt = new VirusTotal(ApiKey);
+                var vt = new VirusTotal(_apiKey);
 
                 var report = vt.GetFileReport(fileInfo);
 
@@ -93,7 +111,7 @@ namespace VirusTotalAutoScanner
                 {
                     _logger.Log(report.Positives == 0 ? LogLevel.Info : LogLevel.Warn, "File has {0} positives", report.Positives);
                 }
-                    
+
 
                 if (report.ResponseCode == ReportResponseCode.Present && report.Positives > 0)
                     RemoveExecutePermission(fullPath);
@@ -106,7 +124,7 @@ namespace VirusTotalAutoScanner
                         _sessionScan.Add(new FileInfoAndScanResult { FilePath = fileInfo.FullName, ScanResult = scanResult });
                 }
 
-                _procssed.Add(fullPath);
+                Procssed.Add(fullPath);
             }
             catch (Exception ex)
             {
@@ -132,7 +150,7 @@ namespace VirusTotalAutoScanner
                     return;
                 }
 
-                var vt = new VirusTotal(ApiKey);
+                var vt = new VirusTotal(_apiKey);
 
                 lock (_sessionScan)
                 {
@@ -153,7 +171,7 @@ namespace VirusTotalAutoScanner
                             _logger.Info("File has {0} positives", report.Positives);
                             if (report.Positives > 0)
                                 RemoveExecutePermission(filePath);
-                             _sessionScan.Remove(_sessionScan[i]);
+                            _sessionScan.Remove(_sessionScan[i]);
                         }
                         else
                         {
@@ -164,7 +182,7 @@ namespace VirusTotalAutoScanner
             }
             catch (Exception ex)
             {
-                _logger.Fatal("CheckScans thread crashed",ex);
+                _logger.Fatal("CheckScans thread crashed", ex);
                 throw;
             }
         }
@@ -175,7 +193,7 @@ namespace VirusTotalAutoScanner
 
             var permissions = fileInfo.GetAccessControl(AccessControlSections.Access);
 
-            var rule = new FileSystemAccessRule("Everyone",FileSystemRights.ReadData | FileSystemRights.ExecuteFile , AccessControlType.Deny);
+            var rule = new FileSystemAccessRule("Everyone", FileSystemRights.ReadData | FileSystemRights.ExecuteFile, AccessControlType.Deny);
 
             permissions.AddAccessRule(rule);
 
@@ -188,7 +206,7 @@ namespace VirusTotalAutoScanner
         {
             var permissions = new FileSecurity(filePath, AccessControlSections.Access);
 
-            var rules = permissions.GetAccessRules(true, false, typeof (SecurityIdentifier));
+            var rules = permissions.GetAccessRules(true, false, typeof(SecurityIdentifier));
 
             for (var i = 0; i < rules.Count; i++)
             {
@@ -199,7 +217,7 @@ namespace VirusTotalAutoScanner
                     rule.FileSystemRights == (FileSystemRights.ReadData | FileSystemRights.ExecuteFile))
                     return true;
             }
-                return false;
+            return false;
         }
 
         private static string _everybody;
@@ -213,7 +231,7 @@ namespace VirusTotalAutoScanner
 
     public class FileInfoAndScanResult
     {
-        public ScanResult ScanResult;
-        public string FilePath;
+        public ScanResult ScanResult { get; set; }
+        public string FilePath { get; set; }
     }
 }

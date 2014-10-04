@@ -1,0 +1,11 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<Configuration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+xsi:schemaLocation="http://w3.org/ VirusTotalAutoScannerConfiguration.xsd">
+  <Locations>
+    <Location>
+      <Path>%USERPROFILE%\Downloads\</Path>
+      <IncludeSubfolders>true</IncludeSubfolders>
+    </Location>
+  </Locations>
+  <VirusTotalApiKey>e49c455020f74072f577ad2f614800b9a8cce2c77c6e927e17f141100a2d9091</VirusTotalApiKey>
+</Configuration>
