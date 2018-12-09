@@ -7,5 +7,5 @@ xsi:schemaLocation="http://w3.org/ VirusTotalAutoScannerConfiguration.xsd">
       <IncludeSubfolders>true</IncludeSubfolders>
     </Location>
   </Locations>
-  <VirusTotalApiKey>e49c455020f74072f577ad2f614800b9a8cce2c77c6e927e17f141100a2d9091</VirusTotalApiKey>
+  <VirusTotalApiKey></VirusTotalApiKey>
 </Configuration>
